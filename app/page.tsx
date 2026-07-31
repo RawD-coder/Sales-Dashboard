@@ -2,15 +2,16 @@
 import { useEffect, useState } from 'react';
 
 export default function LaporanPenjualan() {
-  const [laporanBulanan, setLaporanBulanan] = useState([]);
+  // Tambahan <any[]> agar TypeScript tahu ini berisi kumpulan data
+  const [laporanBulanan, setLaporanBulanan] = useState<any[]>([]);
   const [grandTotal, setGrandTotal] = useState({ marketplace: 0, playbook: 0, tokoBuku: 0 });
   const [loading, setLoading] = useState(true);
 
-  // === SESUAIKAN DENGAN NAMA KOLOM DI SPREADSHEET ANDA ===
   const NAMA_KOLOM_TANGGAL = 'Tanggal'; 
   const NAMA_KOLOM_PENJUALAN = 'Total'; 
 
-  const formatRupiah = (angka) => {
+  // Tambahan tipe data (angka: number)
+  const formatRupiah = (angka: number) => {
     return new Intl.NumberFormat('id-ID', { 
       style: 'currency', 
       currency: 'IDR', 
@@ -24,19 +25,19 @@ export default function LaporanPenjualan() {
         const res = await fetch('/api/sales');
         const result = await res.json();
 
-        const rekap = {};
-        const totalKeseluruhan = { marketplace: 0, playbook: 0, tokoBuku: 0 };
+        // Tambahan Record<string, any> untuk TypeScript
+        const rekap: Record<string, any> = {};
+        const totalKeseluruhan: Record<string, number> = { marketplace: 0, playbook: 0, tokoBuku: 0 };
 
-        const prosesData = (sumberData, namaSumber) => {
-          sumberData.forEach(item => {
+        // Tambahan tipe data (sumberData: any[], namaSumber: string)
+        const prosesData = (sumberData: any[], namaSumber: string) => {
+          sumberData.forEach((item: any) => {
             const tanggalMentah = item[NAMA_KOLOM_TANGGAL] || item['Date'] || item['tanggal'];
             if (!tanggalMentah) return; 
 
-            // 1. PERBAIKAN: Deteksi dan Terjemahkan Tanggal Bahasa Indonesia
             let bersihTanggal = String(tanggalMentah).trim();
             
-            // Kamus terjemahan bulan ID -> EN agar terbaca oleh sistem
-            const bulanIndo = {
+            const bulanIndo: Record<string, string> = {
               'januari': 'January', 'februari': 'February', 'maret': 'March', 'april': 'April',
               'mei': 'May', 'juni': 'June', 'juli': 'July', 'agustus': 'August',
               'september': 'September', 'oktober': 'October', 'november': 'November', 'desember': 'December',
@@ -49,24 +50,20 @@ export default function LaporanPenjualan() {
             }
 
             let dateObj;
-            // Deteksi format angka misal DD/MM/YYYY (mengabaikan jam di belakangnya)
             const cekFormatAngka = bersihTanggal.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
             
             if (cekFormatAngka) {
-                // Konversi dari DD-MM-YYYY ke YYYY-MM-DD standar Internasional
                 dateObj = new Date(`${cekFormatAngka[3]}-${cekFormatAngka[2].padStart(2,'0')}-${cekFormatAngka[1].padStart(2,'0')}T00:00:00`);
             } else {
-                // Untuk format text seperti "15 May 2024"
                 dateObj = new Date(bersihTanggal);
             }
 
-            // Jika tanggal benar-benar tidak bisa dibaca, kita lewati baris ini
-            if (isNaN(dateObj)) {
+            // Tambahan .getTime() agar TS tidak error
+            if (isNaN(dateObj.getTime())) {
               console.warn("Format tanggal tidak dikenali:", tanggalMentah);
               return; 
             }
 
-            // 2. Parsing Nominal Penjualan
             let nilaiMentah = item[NAMA_KOLOM_PENJUALAN] || item['Harga'] || item['Penjualan'] || "0";
             if (typeof nilaiMentah === 'string') {
               nilaiMentah = nilaiMentah.replace(/[^0-9]/g, '');
@@ -89,10 +86,15 @@ export default function LaporanPenjualan() {
         prosesData(result.playbook || [], 'playbook');
         prosesData(result.tokoBuku || [], 'tokoBuku');
 
-        const dataTerurut = Object.values(rekap).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+        // INI BAGIAN YANG ERROR TADI: Tambahan (a: any, b: any) memecahkan masalahnya
+        const dataTerurut = Object.values(rekap).sort((a: any, b: any) => b.monthKey.localeCompare(a.monthKey));
         
         setLaporanBulanan(dataTerurut);
-        setGrandTotal(totalKeseluruhan);
+        setGrandTotal({
+          marketplace: totalKeseluruhan.marketplace,
+          playbook: totalKeseluruhan.playbook,
+          tokoBuku: totalKeseluruhan.tokoBuku
+        });
 
       } catch (error) {
         console.error("Gagal memuat laporan", error);
@@ -105,7 +107,6 @@ export default function LaporanPenjualan() {
 
   if (loading) return <div className="p-10 text-xl font-bold flex items-center justify-center min-h-screen">Memuat Data Penjualan...</div>;
 
-  // Hitung total semua sumber pendapatan
   const totalSemuaPendapatan = grandTotal.marketplace + grandTotal.playbook + grandTotal.tokoBuku;
 
   return (
@@ -113,7 +114,6 @@ export default function LaporanPenjualan() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-6 text-slate-900">Dashboard Laporan Penjualan</h1>
         
-        {/* === BANNER GRAND TOTAL KESELURUHAN (BARU) === */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 mb-8 shadow-lg text-white">
           <h2 className="text-lg md:text-xl font-medium text-slate-300 mb-2">Total Keseluruhan Pendapatan</h2>
           <p className="text-4xl md:text-6xl font-bold tracking-tight">
@@ -124,7 +124,6 @@ export default function LaporanPenjualan() {
           </p>
         </div>
 
-        {/* Ringkasan Masing-Masing Sumber */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="p-6 bg-white rounded-xl border border-blue-200 shadow-sm border-l-4 border-l-blue-500">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">Marketplace</h2>
@@ -140,7 +139,6 @@ export default function LaporanPenjualan() {
           </div>
         </div>
 
-        {/* Tabel Laporan Bulanan */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
             <h2 className="text-xl font-bold text-slate-800">Rekapitulasi Penjualan Per Bulan</h2>
